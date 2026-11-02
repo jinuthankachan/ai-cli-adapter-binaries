@@ -14,7 +14,7 @@ This repository hosts the prebuilt binaries and the installer. Releases are on t
   * Gemini: `generateContent`, `streamGenerateContent`, `countTokens`, `GET /v1beta/models` (also under `/v1/` and `/v1alpha/`)
 * **Three backends**: Claude Code (`claude`), OpenAI Codex CLI (`codex`), Google Antigravity CLI (`agy`). Any API style can reach any backend, for example the OpenAI SDK answered by Claude Code.
 * **Streaming** (SSE) in all three styles, with keep-alives while the CLI starts.
-* **Model routing**: pick a backend with a prefix (`claude:opus`, `codex:gpt-5.5`), aliases, per-backend model lists or regex rules.
+* **Model routing**: pick a backend in the base URL (`…/claude`, `…/codex/v1`), with a model prefix (`claude:opus`, `codex:gpt-5.5`), aliases, per-backend model lists or regex rules.
 * **Reasoning controls**: `reasoning_effort`, Anthropic `thinking`, Gemini `thinkingConfig` map to each CLI's effort setting. Reasoning text can optionally be returned to the client.
 * **Stop sequences** that work with every backend, and token usage reported in each protocol's format.
 * **Web dashboard** at `/`:
@@ -135,7 +135,22 @@ Expect 3 to 15 seconds before the first token. Each request starts a fresh CLI p
 
 ## Choosing a backend and model
 
-The `model` field decides which CLI runs, checked in this order:
+The simplest way is to put the backend in the base URL. Every API style works under every backend:
+
+| Backend | Anthropic and Gemini SDKs | OpenAI SDKs |
+|---|---|---|
+| Claude Code | `http://127.0.0.1:8787/claude` | `http://127.0.0.1:8787/claude/v1` |
+| Codex | `http://127.0.0.1:8787/codex` | `http://127.0.0.1:8787/codex/v1` |
+| Antigravity | `http://127.0.0.1:8787/agy` | `http://127.0.0.1:8787/agy/v1` |
+
+```python
+Anthropic(base_url="http://127.0.0.1:8787/claude", api_key="unused")
+OpenAI(base_url="http://127.0.0.1:8787/codex/v1", api_key="unused")
+```
+
+That backend then runs every request, and the model name is passed to its CLI as is, so the app can send any name the CLI accepts. A name that points at another backend, such as `codex:gpt-5.5` or `codex-default` under `/claude`, is rejected. The model list at `/claude/v1/models` shows only Claude Code's models.
+
+Without a backend in the URL, the `model` field decides which CLI runs, checked in this order:
 
 1. **Prefix**: `claude:opus`, `codex:gpt-5.5`, `agy:gemini-3.8-flash-high`. The part after the colon is passed to the CLI; `codex:` alone means the CLI's default model.
 2. **Aliases** set in the dashboard, for example `gpt-4o` → `codex:gpt-5.5`.
