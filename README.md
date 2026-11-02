@@ -8,18 +8,18 @@ This repository hosts the prebuilt binaries and the installer. Releases are on t
 
 ## Features
 
-* **Three API styles in one server**
+* **Three API styles in one server**, each under every backend (`/claude/…`, `/codex/…`, `/agy/…`):
   * OpenAI Chat Completions: `POST /v1/chat/completions`, `GET /v1/models`
   * Anthropic Messages: `POST /v1/messages`, `POST /v1/messages/count_tokens`
   * Gemini: `generateContent`, `streamGenerateContent`, `countTokens`, `GET /v1beta/models` (also under `/v1/` and `/v1alpha/`)
 * **Three backends**: Claude Code (`claude`), OpenAI Codex CLI (`codex`), Google Antigravity CLI (`agy`). Any API style can reach any backend, for example the OpenAI SDK answered by Claude Code.
 * **Streaming** (SSE) in all three styles, with keep-alives while the CLI starts.
-* **Model routing**: pick a backend in the base URL (`…/claude`, `…/codex/v1`), with a model prefix (`claude:opus`, `codex:gpt-5.5`), aliases, per-backend model lists or regex rules.
+* **Backend in the URL**: the base URL alone picks the CLI (`…/claude`, `…/codex/v1`), and the model name goes to that CLI as is.
 * **Reasoning controls**: `reasoning_effort`, Anthropic `thinking`, Gemini `thinkingConfig` map to each CLI's effort setting. Reasoning text can optionally be returned to the client.
 * **Stop sequences** that work with every backend, and token usage reported in each protocol's format.
 * **Web dashboard** at `/`:
   * CLI paths, login checks and a test ping per backend
-  * routing rules and aliases
+  * a playground to send a prompt through any backend in any API style
   * request log
   * an **API compatibility** tab listing which upstream API fields are supported
 * **Optional agent mode** per backend: let the CLI use its own tools inside a working directory you choose.
@@ -141,7 +141,7 @@ Expect 3 to 15 seconds before the first token. Each request starts a fresh CLI p
 
 ## Choosing a backend and model
 
-The simplest way is to put the backend in the base URL. Every API style works under every backend:
+The base URL picks the backend. Every API style works under every backend:
 
 | Backend | Anthropic and Gemini SDKs | OpenAI SDKs |
 |---|---|---|
@@ -149,17 +149,11 @@ The simplest way is to put the backend in the base URL. Every API style works un
 | Codex | `http://127.0.0.1:8787/codex` | `http://127.0.0.1:8787/codex/v1` |
 | Antigravity | `http://127.0.0.1:8787/agy` | `http://127.0.0.1:8787/agy/v1` |
 
-That backend then runs every request, and the model name is passed to its CLI as is, so the app can send any name the CLI accepts. A name that points at another backend, such as `codex:gpt-5.5` or `codex-default` under `/claude`, is rejected. The model list at `/claude/v1/models` shows only Claude Code's models.
+The model name is passed to that backend's CLI as is, so the app can send any name the CLI accepts. `claude-default` under `/claude` (`codex-default` under `/codex`, `agy-default` under `/agy`) means the CLI's own default model. The model list at `/claude/v1/models` shows only Claude Code's models; **Fetch models** in the dashboard fills each backend's list from its CLI.
 
-Without a backend in the URL (`http://127.0.0.1:8787`, or `http://127.0.0.1:8787/v1` for OpenAI SDKs), the `model` field decides which CLI runs, checked in this order:
+A URL without a backend, such as `http://127.0.0.1:8787/v1/chat/completions`, answers 404 and names the paths to use instead.
 
-1. **Prefix**: `claude:opus`, `codex:gpt-5.5`, `agy:gemini-3.8-flash-high`. The part after the colon is passed to the CLI; `codex:` alone means the CLI's default model.
-2. **Aliases** set in the dashboard, for example `gpt-4o` → `codex:gpt-5.5`.
-3. **Model lists**: a name in a backend's model list goes to that backend. **Fetch models** in the dashboard fills the list from the CLI.
-4. **Routing rules** (regular expressions). By default `claude…`/`anthropic…` go to Claude Code, `gpt…`/`o1…`/`codex…` to Codex, and `gemini…`/`agy…` to Antigravity.
-5. **Default backend** (Claude Code unless changed).
-
-`claude-default`, `codex-default` and `agy-default` always work and mean "the CLI's own default model".
+Earlier versions also let the model name pick the CLI (`codex:gpt-5.5`, aliases, routing rules, a default backend). That is gone: apps that used `http://127.0.0.1:8787` or `http://127.0.0.1:8787/v1` as their base URL need the backend added. Old `defaultBackend`, `routing` and `modelMap` settings are ignored and removed from the config file the next time you save settings in the dashboard.
 
 ## Configuration
 
@@ -232,6 +226,7 @@ To uninstall by hand, stop the service if you set one up, then delete:
 ## Troubleshooting
 
 * **A CLI shows as missing in the dashboard**: it is not on the `PATH` the server was started with. Put the absolute path (from `which claude`) in the backend's "Executable path" field.
+* **`404 No route for POST /v1/messages`** (or another `/v1…` path): the app's base URL has no backend in it. Add `/claude`, `/codex` or `/agy`, as in [Choosing a backend and model](#choosing-a-backend-and-model).
 * **Codex: `The '<model>' model is not supported when using Codex with a ChatGPT account`**: use `codex-default` or a model your plan includes.
 * **agy: `agy produced no text because it tried to use tools`**: the model wanted to run a command. Rephrase, or turn on **Allow tools** for agy.
 * **504 timeouts**: raise `server.requestTimeoutMs` for long agent runs.
