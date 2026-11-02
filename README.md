@@ -20,6 +20,7 @@ This repository hosts the prebuilt binaries and the installer. Releases are on t
 * **Web dashboard** at `/`:
   * CLI paths, login checks and a test ping per backend
   * a playground to send a prompt through any backend in any API style
+  * copy-ready curl and SDK examples (Python, JavaScript) for each backend
   * request log
   * an **API compatibility** tab listing which upstream API fields are supported
 * **Optional agent mode** per backend: let the CLI use its own tools inside a working directory you choose.
@@ -117,24 +118,101 @@ curl 'http://127.0.0.1:8787/agy/v1beta/models/agy-default:streamGenerateContent?
   -d '{"contents":[{"role":"user","parts":[{"text":"Say hi"}]}]}'
 ```
 
-With the official SDKs, set the base URL and use any API key; the key is ignored unless you set one in the dashboard:
+With the official SDKs, set the base URL and use any API key; the key is ignored unless you set one in the dashboard. The dashboard's **SDK examples** show the same code for whichever backend you pick, with your host, port and API key filled in.
+
+Python (`pip install openai anthropic google-genai`):
 
 ```python
-from openai import OpenAI
-OpenAI(base_url="http://127.0.0.1:8787/codex/v1", api_key="unused") \
-    .chat.completions.create(model="codex-default", messages=[{"role": "user", "content": "hi"}])
-
-# any API style works with any CLI: the OpenAI SDK answered by Claude Code
-OpenAI(base_url="http://127.0.0.1:8787/claude/v1", api_key="unused") \
-    .chat.completions.create(model="claude-opus-5-5", messages=[{"role": "user", "content": "hi"}])
-
 from anthropic import Anthropic
-Anthropic(base_url="http://127.0.0.1:8787/claude", api_key="unused") \
-    .messages.create(model="claude-default", max_tokens=1024, messages=[{"role": "user", "content": "hi"}])
-
 from google import genai
-genai.Client(api_key="unused", http_options={"base_url": "http://127.0.0.1:8787/agy"}) \
-    .models.generate_content(model="agy-default", contents="hi")
+from openai import OpenAI
+
+messages = [{"role": "user", "content": "Say hi"}]
+
+# OpenAI SDK, answered by Codex (OpenAI SDKs need /v1 at the end of the base URL)
+codex = OpenAI(base_url="http://127.0.0.1:8787/codex/v1", api_key="unused")
+reply = codex.chat.completions.create(model="codex-default", messages=messages)
+print(reply.choices[0].message.content)
+
+# OpenAI SDK, streaming, answered by Claude Code: only the base URL changes
+claude = OpenAI(base_url="http://127.0.0.1:8787/claude/v1", api_key="unused")
+for chunk in claude.chat.completions.create(model="claude-opus-5-5", messages=messages, stream=True):
+    if chunk.choices:
+        print(chunk.choices[0].delta.content or "", end="", flush=True)
+print()
+
+# Anthropic SDK, answered by Claude Code
+anthropic_client = Anthropic(base_url="http://127.0.0.1:8787/claude", api_key="unused")
+message = anthropic_client.messages.create(model="claude-sonnet-5-5", max_tokens=1024, messages=messages)
+print(message.content[0].text)
+with anthropic_client.messages.stream(model="claude-sonnet-5-5", max_tokens=1024, messages=messages) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+print()
+
+# Google GenAI SDK, answered by Antigravity
+gemini_client = genai.Client(api_key="unused", http_options={"base_url": "http://127.0.0.1:8787/agy"})
+print(gemini_client.models.generate_content(model="agy-default", contents="Say hi").text)
+for chunk in gemini_client.models.generate_content_stream(model="agy-default", contents="Say hi"):
+    print(chunk.text or "", end="", flush=True)
+print()
+```
+
+JavaScript or TypeScript (`npm install openai @anthropic-ai/sdk @google/genai`, Node 18 or newer, as an ES module):
+
+```js
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
+
+// OpenAI SDK, answered by Codex (OpenAI SDKs need /v1 at the end of the base URL)
+const codex = new OpenAI({ baseURL: "http://127.0.0.1:8787/codex/v1", apiKey: "unused" });
+const reply = await codex.chat.completions.create({
+  model: "codex-default",
+  messages: [{ role: "user", content: "Say hi" }],
+});
+console.log(reply.choices[0].message.content);
+
+// OpenAI SDK, streaming, answered by Claude Code: only the base URL changes
+const claude = new OpenAI({ baseURL: "http://127.0.0.1:8787/claude/v1", apiKey: "unused" });
+const chunks = await claude.chat.completions.create({
+  model: "claude-opus-5-5",
+  messages: [{ role: "user", content: "Say hi" }],
+  stream: true,
+});
+for await (const chunk of chunks) process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+console.log();
+
+// Anthropic SDK, answered by Claude Code
+const anthropic = new Anthropic({ baseURL: "http://127.0.0.1:8787/claude", apiKey: "unused" });
+const message = await anthropic.messages.create({
+  model: "claude-sonnet-5-5",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Say hi" }],
+});
+for (const block of message.content) if (block.type === "text") console.log(block.text);
+await anthropic.messages
+  .stream({ model: "claude-sonnet-5-5", max_tokens: 1024, messages: [{ role: "user", content: "Say hi" }] })
+  .on("text", (text) => process.stdout.write(text))
+  .finalMessage();
+console.log();
+
+// Google GenAI SDK, answered by Antigravity
+const gemini = new GoogleGenAI({ apiKey: "unused", httpOptions: { baseUrl: "http://127.0.0.1:8787/agy" } });
+const response = await gemini.models.generateContent({ model: "agy-default", contents: "Say hi" });
+console.log(response.text);
+for await (const chunk of await gemini.models.generateContentStream({ model: "agy-default", contents: "Say hi" })) {
+  process.stdout.write(chunk.text ?? "");
+}
+console.log();
+```
+
+Apps built on these SDKs can usually be pointed at the adapter without code changes, because the SDKs read their base URL from the environment. Set the matching API key variable too (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`); any value works unless the adapter has an API key:
+
+```bash
+export OPENAI_BASE_URL=http://127.0.0.1:8787/codex/v1     # openai (Python and JavaScript)
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8787/claude    # anthropic, @anthropic-ai/sdk
+export GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:8787/agy   # google-genai, @google/genai
 ```
 
 Expect 3 to 15 seconds before the first token. Each request starts a fresh CLI process, and the CLIs take a few seconds to boot.
