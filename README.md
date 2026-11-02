@@ -2,7 +2,7 @@
 
 Use your **Claude Code**, **OpenAI Codex** and **Google Antigravity** subscriptions from any app that talks to the Anthropic, OpenAI or Gemini API.
 
-AI CLI Adapter is a small local HTTP server. It looks like the Anthropic, OpenAI and Gemini APIs, and it answers every request by running a coding-agent CLI that is already installed and logged in on your machine. Point an SDK, IDE plugin, chat UI, LangChain, LiteLLM or plain `curl` at `http://127.0.0.1:8787`, and the request runs through `claude`, `codex` or `agy`, without a separate API key or API billing.
+AI CLI Adapter is a small local HTTP server. It looks like the Anthropic, OpenAI and Gemini APIs, and it answers every request by running a coding-agent CLI that is already installed and logged in on your machine. Point an SDK, IDE plugin, chat UI, LangChain, LiteLLM or plain `curl` at `http://127.0.0.1:8787/claude`, `/codex` or `/agy`, and the request runs through that CLI, without a separate API key or API billing.
 
 This repository hosts the prebuilt binaries and the installer. Releases are on the [Releases page](https://github.com/jinuthankachan/ai-cli-adapter-binaries/releases).
 
@@ -101,17 +101,19 @@ ai-cli-adapter --help                # all options
 
 Open <http://127.0.0.1:8787/>. The dashboard checks every backend on load (executable found, version, login). Press **Ping** on a backend card to run a real prompt through it.
 
+The CLI that answers is picked by the base URL: `/claude`, `/codex` or `/agy`, with `/v1` added for OpenAI SDKs (see [Choosing a backend and model](#choosing-a-backend-and-model)).
+
 ```bash
 # OpenAI style, answered by Codex
-curl http://127.0.0.1:8787/v1/chat/completions -H 'content-type: application/json' \
+curl http://127.0.0.1:8787/codex/v1/chat/completions -H 'content-type: application/json' \
   -d '{"model":"codex-default","messages":[{"role":"user","content":"Say hi"}]}'
 
 # Anthropic style, answered by Claude Code
-curl http://127.0.0.1:8787/v1/messages -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
+curl http://127.0.0.1:8787/claude/v1/messages -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
   -d '{"model":"claude-default","max_tokens":1024,"messages":[{"role":"user","content":"Say hi"}]}'
 
 # Gemini style, streaming, answered by Antigravity
-curl 'http://127.0.0.1:8787/v1beta/models/agy-default:streamGenerateContent?alt=sse' -H 'content-type: application/json' \
+curl 'http://127.0.0.1:8787/agy/v1beta/models/agy-default:streamGenerateContent?alt=sse' -H 'content-type: application/json' \
   -d '{"contents":[{"role":"user","parts":[{"text":"Say hi"}]}]}'
 ```
 
@@ -119,15 +121,19 @@ With the official SDKs, set the base URL and use any API key; the key is ignored
 
 ```python
 from openai import OpenAI
-OpenAI(base_url="http://127.0.0.1:8787/v1", api_key="unused") \
+OpenAI(base_url="http://127.0.0.1:8787/codex/v1", api_key="unused") \
     .chat.completions.create(model="codex-default", messages=[{"role": "user", "content": "hi"}])
 
+# any API style works with any CLI: the OpenAI SDK answered by Claude Code
+OpenAI(base_url="http://127.0.0.1:8787/claude/v1", api_key="unused") \
+    .chat.completions.create(model="claude-opus-5-5", messages=[{"role": "user", "content": "hi"}])
+
 from anthropic import Anthropic
-Anthropic(base_url="http://127.0.0.1:8787", api_key="unused") \
+Anthropic(base_url="http://127.0.0.1:8787/claude", api_key="unused") \
     .messages.create(model="claude-default", max_tokens=1024, messages=[{"role": "user", "content": "hi"}])
 
 from google import genai
-genai.Client(api_key="unused", http_options={"base_url": "http://127.0.0.1:8787"}) \
+genai.Client(api_key="unused", http_options={"base_url": "http://127.0.0.1:8787/agy"}) \
     .models.generate_content(model="agy-default", contents="hi")
 ```
 
@@ -143,14 +149,9 @@ The simplest way is to put the backend in the base URL. Every API style works un
 | Codex | `http://127.0.0.1:8787/codex` | `http://127.0.0.1:8787/codex/v1` |
 | Antigravity | `http://127.0.0.1:8787/agy` | `http://127.0.0.1:8787/agy/v1` |
 
-```python
-Anthropic(base_url="http://127.0.0.1:8787/claude", api_key="unused")
-OpenAI(base_url="http://127.0.0.1:8787/codex/v1", api_key="unused")
-```
-
 That backend then runs every request, and the model name is passed to its CLI as is, so the app can send any name the CLI accepts. A name that points at another backend, such as `codex:gpt-5.5` or `codex-default` under `/claude`, is rejected. The model list at `/claude/v1/models` shows only Claude Code's models.
 
-Without a backend in the URL, the `model` field decides which CLI runs, checked in this order:
+Without a backend in the URL (`http://127.0.0.1:8787`, or `http://127.0.0.1:8787/v1` for OpenAI SDKs), the `model` field decides which CLI runs, checked in this order:
 
 1. **Prefix**: `claude:opus`, `codex:gpt-5.5`, `agy:gemini-3.8-flash-high`. The part after the colon is passed to the CLI; `codex:` alone means the CLI's default model.
 2. **Aliases** set in the dashboard, for example `gpt-4o` → `codex:gpt-5.5`.
