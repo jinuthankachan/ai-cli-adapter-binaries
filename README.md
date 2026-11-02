@@ -95,6 +95,7 @@ If the script warns that `~/.local/bin` is not on your `PATH`, add `export PATH=
 ```bash
 ai-cli-adapter                       # serves http://127.0.0.1:8787
 ai-cli-adapter --port 9000           # other port
+ai-cli-adapter --version             # installed version
 ai-cli-adapter --help                # all options
 ```
 
@@ -184,7 +185,7 @@ The service keeps the `PATH` from when you installed it, so it finds the CLIs. I
 
 ## Upgrade
 
-Run the install command again. It replaces the binary and restarts the background service if one is installed. Your settings in `~/.ai-cli-adapter` are kept.
+Run the install command again. It replaces the binary and restarts the background service if one is installed. Your settings in `~/.ai-cli-adapter` are kept. Check the result with `ai-cli-adapter --version`.
 
 ## Uninstall
 
@@ -225,4 +226,4 @@ Report problems in this repository's [issues](https://github.com/jinuthankachan/
 
 ## License
 
-MIT
+[MIT](LICENSE)
